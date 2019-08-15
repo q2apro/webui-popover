@@ -35,6 +35,7 @@
                 error: null //function(that, xhr, data){}
             },
             cache: true,
+            global: true,
             multi: false,
             arrow: true,
             title: '',
@@ -589,6 +590,9 @@
                 }
                 return this.options.cache;
             },
+            getGlobal: function () {
+                return this.$element.attr('data-global') || this.options.global;
+            },
             getTrigger: function() {
                 return this.$element.attr('data-trigger') || this.options.trigger;
             },
@@ -706,6 +710,7 @@
                     url: this.getUrl(),
                     type: this.options.async.type,
                     cache: this.getCache(),
+                    global: this.getGlobal(),
                     beforeSend: function(xhr, settings) {
                         if (that.options.async.before) {
                             that.options.async.before(that, xhr, settings);
