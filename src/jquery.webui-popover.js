@@ -842,6 +842,8 @@
                     container = this.options.container,
                     clientWidth = container.innerWidth(),
                     clientHeight = container.innerHeight(),
+                    windowHeight = $(window).height(),
+                    windowScrollHeight = $(window).scrollTop(),
                     scrollTop = container.scrollTop(),
                     scrollLeft = container.scrollLeft(),
                     pageX = Math.max(0, pos.left - scrollLeft),
@@ -905,6 +907,13 @@
                             }
                         } else {
                             placement = isH ? 'left-top' : 'top-left';
+                        }
+                    }
+                    if(isV) {
+                        if( (pos.top - windowScrollHeight) > windowHeight/3*2 ) {
+                            placement = placement.replace('bottom','top');
+                        } else {
+                            placement = placement.replace('top','bottom');
                         }
                     }
                 } else if (placement === 'auto-top') {
