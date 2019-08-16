@@ -1,5 +1,5 @@
 /*
- *  webui popover plugin  - v1.2.17
+ *  webui popover plugin  - v1.2.18
  *  A lightWeight popover plugin with jquery ,enchance the  popover plugin of bootstrap with some awesome new features. It works well with bootstrap ,but bootstrap is not necessary!
  *  https://github.com/sandywalker/webui-popover
  *
@@ -43,6 +43,7 @@
                 error: null //function(that, xhr, data){}
             },
             cache: true,
+            global: true,
             multi: false,
             arrow: true,
             title: '',
@@ -86,7 +87,6 @@
         var _srcElements = [];
         var backdrop = $('<div class="webui-popover-backdrop"></div>');
         var _globalIdSeed = 0;
-        var _isBodyEventHandled = false;
         var _offsetOut = -2000; // the value offset  out of the screen
         var $document = $(document);
 
@@ -282,7 +282,7 @@
                 this.$element.trigger('hidden.' + pluginType, [this.$target]);
 
                 if (this.options.onHide) {
-                    this.options.onHide(this.$target);
+                    this.options.onHide(this.$target, this.getTriggerElement());
                 }
 
             },
@@ -357,7 +357,7 @@
                 this.displayContent();
 
                 if (this.options.onShow) {
-                    this.options.onShow($target);
+                    this.options.onShow($target, this.getTriggerElement());
                 }
 
                 this.bindBodyEvents();
@@ -369,7 +369,7 @@
             },
             displayContent: function() {
                 var
-                //element postion
+                    //element postion
                     elementPos = this.getElementPosition(),
                     //target postion
                     $target = this.getTarget().removeClass().addClass(pluginClass).addClass(this._customTargetClass),
@@ -466,9 +466,21 @@
                 targetWidth = $target[0].offsetWidth;
                 targetHeight = $target[0].offsetHeight;
 
-                var postionInfo = this.getTargetPositin(elementPos, placement, targetWidth, targetHeight);
+                var positionInfo = this.getTargetPosition(elementPos, placement, targetWidth, targetHeight);
 
-                this.$target.css(postionInfo.position).addClass(placement).addClass('in');
+                this.$target.css(positionInfo.position).addClass(placement).addClass('in');
+
+                var that = this;
+                var resizeHandler = function() {
+                    elementPos = that.getElementPosition();
+                    positionInfo = that.getTargetPosition(elementPos, placement, targetWidth, targetHeight);
+                    that.$target.css(positionInfo.position).addClass(placement);
+                };
+                var resizeId;
+                $(window).on('resize', function() {
+                    clearTimeout(resizeId);
+                    resizeId = setTimeout(resizeHandler, 100);
+                });
 
                 if (this.options.type === 'iframe') {
                     var $iframe = $target.find('iframe');
@@ -506,12 +518,12 @@
                         });
                     }
 
-                    if (postionInfo.arrowOffset) {
+                    if (positionInfo.arrowOffset) {
                         //hide the arrow if offset is negative
-                        if (postionInfo.arrowOffset.left === -1 || postionInfo.arrowOffset.top === -1) {
+                        if (positionInfo.arrowOffset.left === -1 || positionInfo.arrowOffset.top === -1) {
                             $arrow.hide();
                         } else {
-                            $arrow.css(postionInfo.arrowOffset);
+                            $arrow.css(positionInfo.arrowOffset);
                         }
                     }
 
@@ -585,6 +597,9 @@
                     }
                 }
                 return this.options.cache;
+            },
+            getGlobal: function() {
+                return this.$element.attr('data-global') || this.options.global;
             },
             getTrigger: function() {
                 return this.$element.attr('data-trigger') || this.options.trigger;
@@ -703,6 +718,7 @@
                     url: this.getUrl(),
                     type: this.options.async.type,
                     cache: this.getCache(),
+                    global: this.getGlobal(),
                     beforeSend: function(xhr, settings) {
                         if (that.options.async.before) {
                             that.options.async.before(that, xhr, settings);
@@ -735,19 +751,18 @@
             },
 
             bindBodyEvents: function() {
-                if (_isBodyEventHandled) {
-                    return;
-                }
                 if (this.options.dismissible && this.getTrigger() === 'click') {
                     if (isMobile) {
                         $document.off('touchstart.webui-popover').on('touchstart.webui-popover', $.proxy(this.bodyTouchStartHandler, this));
                     } else {
-                        $document.off('keyup.webui-popover').on('keyup.webui-popover', $.proxy(this.escapeHandler, this));
-                        $document.off('click.webui-popover').on('click.webui-popover', $.proxy(this.bodyClickHandler, this));
+                        $document.off('keyup.webui-popover' + this._idSeed)
+                            .on('keyup.webui-popover' + this._idSeed, $.proxy(this.escapeHandler, this));
+                        $document.off('click.webui-popover' + this._idSeed)
+                            .on('click.webui-popover' + this._idSeed, $.proxy(this.bodyClickHandler, this));
                     }
                 } else if (this.getTrigger() === 'hover') {
-                    $document.off('touchend.webui-popover')
-                        .on('touchend.webui-popover', $.proxy(this.bodyClickHandler, this));
+                    $document.off('touchend.webui-popover' + this._idSeed)
+                        .on('touchend.webui-popover' + this._idSeed, $.proxy(this.bodyClickHandler, this));
                 }
             },
 
@@ -778,7 +793,7 @@
             },
             escapeHandler: function(e) {
                 if (e.keyCode === 27) {
-                    this.hideAll();
+                    this.hide();
                 }
             },
             bodyTouchStartHandler: function(e) {
@@ -793,7 +808,6 @@
                 });
             },
             bodyClickHandler: function(e) {
-                _isBodyEventHandled = true;
                 var canHide = true;
                 for (var i = 0; i < _srcElements.length; i++) {
                     var pop = getPopFromElement(_srcElements[i]);
@@ -805,14 +819,14 @@
                         var popY2 = offset.top + pop.getTarget().height();
                         var pt = pointerEventToXY(e);
                         var inPop = pt.x >= popX1 && pt.x <= popX2 && pt.y >= popY1 && pt.y <= popY2;
-                        if (inPop) {
+                        if (inPop || ((pt.x === 0 && pt.y === 0) || event.target.nodeName === 'OPTION')) {
                             canHide = false;
                             break;
                         }
                     }
                 }
                 if (canHide) {
-                    hideAllPop();
+                    this.hide();
                 }
             },
 
@@ -841,6 +855,8 @@
                     container = this.options.container,
                     clientWidth = container.innerWidth(),
                     clientHeight = container.innerHeight(),
+                    windowHeight = $(window).height(),
+                    windowScrollHeight = $(window).scrollTop(),
                     scrollTop = container.scrollTop(),
                     scrollLeft = container.scrollLeft(),
                     pageX = Math.max(0, pos.left - scrollLeft),
@@ -906,6 +922,13 @@
                             placement = isH ? 'left-top' : 'top-left';
                         }
                     }
+                    if (isV) {
+                        if ((pos.top - windowScrollHeight) > windowHeight / 3 * 2) {
+                            placement = placement.replace('bottom', 'top');
+                        } else {
+                            placement = placement.replace('top', 'bottom');
+                        }
+                    }
                 } else if (placement === 'auto-top') {
                     if (pageX < clientWidth / 3) {
                         placement = 'top-right';
@@ -953,7 +976,7 @@
                         height: this.$element[0].offsetHeight || elRect.height
                     });
                     // Else fixed container need recalculate the  position
-                } else if (cssPos === 'fixed') {
+                } else if (cssPos === 'fixed' || cssPos === 'absolute') {
                     var containerRect = container[0].getBoundingClientRect();
                     return {
                         top: elRect.top - containerRect.top + container.scrollTop(),
@@ -971,7 +994,7 @@
                 }
             },
 
-            getTargetPositin: function(elementPos, placement, targetWidth, targetHeight) {
+            getTargetPosition: function(elementPos, placement, targetWidth, targetHeight) {
                 var pos = elementPos,
                     container = this.options.container,
                     //clientWidth = container.innerWidth(),
